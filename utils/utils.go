@@ -1,4 +1,4 @@
-package utils // github.com/IkiM0no/simplelog/utils
+package utils
 
 import (
 	"crypto/rand"

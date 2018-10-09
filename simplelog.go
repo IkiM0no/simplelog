@@ -1,6 +1,6 @@
 // Package simplelog implements a simple logging package for json log events
 // with variadic functional options for messages and event objects.
-package simplelog // github.com/IkiM0no/simplelog
+package simplelog // import github.com/IkiM0no/simplelog
 
 import (
 	"encoding/json"

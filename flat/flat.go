@@ -1,4 +1,4 @@
-package flat // github.com/IkiM0no/simplelog/flat
+package flat
 
 import (
 	"bytes"

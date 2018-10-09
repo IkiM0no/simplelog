@@ -51,7 +51,7 @@ func MsgF(format string, args ...interface{}) func(*LogEvent) {
 	}
 }
 
-// Event functional option sets LogEvent.Msg to a map.
+// Event functional option sets LogEvent.Event to a map.
 func Event(event map[string]interface{}) func(*LogEvent) {
 	return func(e *LogEvent) {
 		e.Event = event

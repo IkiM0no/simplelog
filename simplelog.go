@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const ISO_8601 = "2006-01-02T15:04:05.000Z"
+const ISO_8601 = "2006-01-02T15:04:05.999Z"
 
 type Logger interface {
 	Info([]func(*LogEvent))

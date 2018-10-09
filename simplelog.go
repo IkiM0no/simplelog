@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"simplelog/flat"
 	"simplelog/utils"
 	"time"
 )
@@ -24,6 +25,7 @@ type Logger interface {
 type LGx struct {
 	host string
 	app  string
+	mode string
 }
 
 type LogEvent struct {
@@ -59,14 +61,24 @@ func Event(event map[string]interface{}) func(*LogEvent) {
 }
 
 // NewLogger returns a logger with hostname and app intialized.
-func NewLogger(app string) (*LGx, error) {
+func NewLogger(app, mode string) (*LGx, error) {
+	var l LGx
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("could not determine hostname %v", err)
 	}
+	l.app = app
+	l.host = hostname
 
-	return &LGx{hostname, app}, nil
+	if mode != "json" && mode != "kvp" {
+		return nil, fmt.Errorf("mode not supported")
+	}
+	l.mode = mode
+
+	return &l, nil
 }
+
+const kvpTemplate = `"time"="%s" "uuid"="%s" "host"="%s" "app"="%s" "level"="%s" "msg"="%s" %s`
 
 // newEvent returns a LogEvent. Convenience method for log-level functions.
 func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
@@ -82,16 +94,28 @@ func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 		Level: level,
 	}
 
-	// apply functional options
 	for _, opt := range opts {
 		opt(e)
 	}
 
-	b, err := json.Marshal(*e)
-	if err != nil {
-		return []byte{}, err
+	if l.mode == "json" {
+		b, err := json.Marshal(*e)
+		if err != nil {
+			return []byte{}, err
+		}
+		return b, nil
+	} else {
+		e := *e
+		f, err := flat.Flatten(e.Event, "event_")
+		if err != nil {
+			return []byte{}, err
+		}
+
+		s := flat.FlatMap(f)
+		event := fmt.Sprintf(kvpTemplate, e.Time, e.Uuid,
+			e.Host, e.App, e.Level, e.Msg, s)
+		return []byte(event), nil
 	}
-	return b, nil
 }
 
 const EventErr = "could not generate log event: %v\n"

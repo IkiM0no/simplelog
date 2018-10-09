@@ -5,9 +5,9 @@ package simplelog
 import (
 	"encoding/json"
 	"fmt"
-	"json_logger/logger/utils"
 	"log"
 	"os"
+	"simplelog/utils"
 	"time"
 )
 

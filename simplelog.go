@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"simplelog/flat"
-	"simplelog/utils"
 	"time"
+
+	"github.com/IkiM0no/simplelog/flat"
+	"github.com/IkiM0no/simplelog/utils"
 )
 
 const ISO_8601 = "2006-01-02T15:04:05.999Z"

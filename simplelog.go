@@ -79,7 +79,7 @@ func NewLogger(app, mode string) (*LGx, error) {
 	return &l, nil
 }
 
-const kvpTemplate = `"time"="%s" "uuid"="%s" "host"="%s" "app"="%s" "level"="%s" "msg"="%s" %s`
+const kvpTemplate = `"date"="%s" "uuid"="%s" "host"="%s" "app"="%s" "level"="%s" "msg"="%s" %s`
 
 // newEvent returns a LogEvent. Convenience method for log-level functions.
 func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {

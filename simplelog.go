@@ -182,3 +182,7 @@ func (l *LGx) Fatalf(format string, v ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, v...)
 	os.Exit(2)
 }
+
+func (l *LGx) Printf(format string, v ...interface{}) {
+	fmt.Fprintf(os.Stdout, format, v...)
+}

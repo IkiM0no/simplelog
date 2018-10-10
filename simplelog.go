@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/IkiM0no/simplelog/flat"
@@ -14,6 +15,18 @@ import (
 )
 
 const ISO_8601 = "2006-01-02T15:04:05.999Z"
+
+type LogLevel int
+
+const (
+	TRACE LogLevel = iota
+	INFO
+	WARN
+	ERROR
+	CRITICAL
+)
+
+var gDefaultLogLevel = INFO
 
 type Logger interface {
 	Print([]func(*LogEvent))
@@ -24,19 +37,20 @@ type Logger interface {
 	Error([]func(*LogEvent))
 	Fatal([]func(*LogEvent))
 
+	Tracef(string, []interface{})
 	Printf(string, []interface{})
 	Infof(string, []interface{})
 	Infoif(bool, string, []interface{})
-	Debugf(string, []interface{})
 	Warnf(string, []interface{})
 	Errorf(string, []interface{})
 	Fatalf(string, []interface{})
 }
 
 type LGx struct {
-	host string
-	app  string
-	mode string
+	host  string
+	app   string
+	mode  string
+	Level LogLevel
 }
 
 type LogEvent struct {
@@ -71,13 +85,35 @@ func Event(event map[string]interface{}) func(*LogEvent) {
 	}
 }
 
-// NewLogger returns a logger with hostname and app intialized.
-func NewLogger(app, mode string) (*LGx, error) {
+func lvlFromString(levelStr string) LogLevel {
+	levelStr = strings.ToLower(strings.TrimSpace(levelStr))
+	switch levelStr {
+	case "trace":
+		return TRACE
+	case "info":
+		return INFO
+	case "warn":
+		return WARN
+	case "error":
+		return ERROR
+	case "critical":
+		return CRITICAL
+	default:
+		return gDefaultLogLevel
+	}
+}
+
+// New returns a logger with hostname and app intialized.
+func New(app, mode, level string) (*LGx, error) {
 	var l LGx
+
+	l.Level = lvlFromString(level)
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("could not determine hostname %v", err)
 	}
+
 	l.app = app
 	l.host = hostname
 
@@ -139,7 +175,7 @@ func (l *LGx) Print(opts ...func(*LogEvent)) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stdout, "%+v\n", string(b))
+	l.put(string(b), "%+v\n", 1)
 }
 
 func (l *LGx) Printif(print bool, opts ...func(*LogEvent)) {
@@ -149,7 +185,7 @@ func (l *LGx) Printif(print bool, opts ...func(*LogEvent)) {
 			log.Printf(EventErr, err)
 			return
 		}
-		fmt.Fprintf(os.Stdout, "%+v\n", string(b))
+		l.put(string(b), "%+v\n", 1)
 	}
 }
 
@@ -159,7 +195,7 @@ func (l *LGx) Info(opts ...func(*LogEvent)) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stdout, "%+v\n", string(b))
+	l.put(string(b), "%+v\n", 1)
 }
 
 func (l *LGx) Debug(opts ...func(*LogEvent)) {
@@ -168,7 +204,7 @@ func (l *LGx) Debug(opts ...func(*LogEvent)) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stdout, "%+v\n", string(b))
+	l.put(string(b), "%+v\n", 1)
 }
 
 func (l *LGx) Warn(opts ...func(*LogEvent)) {
@@ -177,7 +213,7 @@ func (l *LGx) Warn(opts ...func(*LogEvent)) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%+v\n", string(b))
+	l.put(string(b), "%+v\n", 2)
 }
 
 func (l *LGx) Error(opts ...func(*LogEvent)) {
@@ -186,20 +222,29 @@ func (l *LGx) Error(opts ...func(*LogEvent)) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%+v\n", string(b))
+	l.put(string(b), "%+v\n", 3)
 }
 
 func (l *LGx) Fatal(opts ...func(*LogEvent)) {
-	b, err := l.newEvent("FATAL", opts...)
+	b, err := l.newEvent("CRITICAL", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%+v", string(b))
+	l.put(string(b), "%+v\n", 4)
 	os.Exit(2)
 }
 
 // FMT METHODS
+
+func (l *LGx) Tracef(format string, v ...interface{}) {
+	b, err := l.newEvent("DEBUG", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 0)
+}
 
 func (l *LGx) Printf(format string, v ...interface{}) {
 	b, err := l.newEvent("INFO", MsgF(format, v...))
@@ -207,7 +252,7 @@ func (l *LGx) Printf(format string, v ...interface{}) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stdout, "%s", string(b))
+	l.put(string(b), "%s\n", 1)
 }
 
 func (l *LGx) Infof(format string, v ...interface{}) {
@@ -216,7 +261,7 @@ func (l *LGx) Infof(format string, v ...interface{}) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stdout, "%s", string(b))
+	l.put(string(b), "%s\n", 1)
 }
 
 func (l *LGx) Infoif(print bool, format string, v ...interface{}) {
@@ -226,17 +271,8 @@ func (l *LGx) Infoif(print bool, format string, v ...interface{}) {
 			log.Printf(EventErr, err)
 			return
 		}
-		fmt.Fprintf(os.Stdout, "%s", string(b))
+		l.put(string(b), "%s\n", 1)
 	}
-}
-
-func (l *LGx) Debugf(format string, v ...interface{}) {
-	b, err := l.newEvent("DEBUG", MsgF(format, v...))
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	fmt.Fprintf(os.Stdout, "%s", string(b))
 }
 
 func (l *LGx) Warnf(format string, v ...interface{}) {
@@ -245,7 +281,7 @@ func (l *LGx) Warnf(format string, v ...interface{}) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s", string(b))
+	l.put(string(b), "%s\n", 2)
 }
 
 func (l *LGx) Errorf(format string, v ...interface{}) {
@@ -254,15 +290,23 @@ func (l *LGx) Errorf(format string, v ...interface{}) {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s", string(b))
+	l.put(string(b), "%s\n", 3)
 }
 
 func (l *LGx) Fatalf(format string, v ...interface{}) {
-	b, err := l.newEvent("FATAL", MsgF(format, v...))
+	b, err := l.newEvent("CRITICAL", MsgF(format, v...))
 	if err != nil {
 		log.Printf(EventErr, err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s", string(b))
+	l.put(string(b), "%s\n", 4)
 	os.Exit(2)
+}
+
+func (l *LGx) put(logEvent, format string, lvl LogLevel) {
+	if lvl >= l.Level {
+		fmt.Fprintf(os.Stdout, format, logEvent)
+	} else {
+		fmt.Fprintf(os.Stderr, format, logEvent)
+	}
 }

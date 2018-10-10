@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/IkiM0no/simplelog/flat"
 	"github.com/IkiM0no/simplelog/utils"
+	"github.com/urfave/negroni"
 )
 
 const ISO_8601 = "2006-01-02T15:04:05.999Z"
@@ -47,10 +50,11 @@ type Logger interface {
 }
 
 type LGx struct {
-	host  string
-	app   string
-	mode  string
-	Level LogLevel
+	host     string
+	app      string
+	mode     string
+	Level    LogLevel
+	HttpXLog []string // exclude logging matching string URLs in ServeHTTP
 }
 
 type LogEvent struct {
@@ -308,5 +312,23 @@ func (l *LGx) put(logEvent, format string, lvl LogLevel) {
 		fmt.Fprintf(os.Stdout, format, logEvent)
 	} else {
 		fmt.Fprintf(os.Stderr, format, logEvent)
+	}
+}
+
+// Method ServeHTTP provides portability for passing simplelog to http middleware
+func (l *LGx) ServeHTTP(rw http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+	start := time.Now().UTC()
+	next(rw, req)
+	if !utils.StringInSlice(req.URL.Path, l.HttpXLog) {
+		res := rw.(negroni.ResponseWriter)
+		logMessage := map[string]interface{}{
+			"req_time":      start.Format(ISO_8601),
+			"req_status":    strconv.Itoa(res.Status()),
+			"req_elapsed":   fmt.Sprintf("%f", time.Since(start).Seconds()*1e3),
+			"req_x_fwd_for": req.Header.Get("X-Forwarded-For"),
+			"req_method":    req.Method,
+			"req_url_path":  req.URL.Path,
+		}
+		l.Print(Event(logMessage))
 	}
 }

@@ -177,3 +177,8 @@ func (l *LGx) Fatal(opts ...func(*LogEvent)) {
 	fmt.Fprintf(os.Stderr, "%+v", string(b))
 	os.Exit(2)
 }
+
+func (l *LGx) Fatalf(format string, v ...interface{}) {
+	fmt.Fprintf(os.Stderr, format, v...))
+	os.Exit(2)
+}

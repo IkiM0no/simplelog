@@ -85,6 +85,8 @@ func interfaceToString(inf interface{}) string {
 		return inf.(string)
 	case int:
 		return strconv.Itoa(inf.(int))
+	case int64:
+		return strconv.FormatInt(inf.(int64), 10)
 	case bool:
 		return strconv.FormatBool(inf.(bool))
 	case float32:

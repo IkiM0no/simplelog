@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"strconv"
 )
 
@@ -15,7 +16,7 @@ func FlatMap(m map[string]interface{}) string {
 		case string, int, int64, bool, float32, float64, uint64, error:
 			buf.WriteString(fmt.Sprintf(`"%s"="%s" `, k, interfaceToString(v)))
 		default:
-			log.Println("not implemented")
+			log.Println("not implemented. k: %v v: %v. type: %v", k, v, reflect.TypeOf(v))
 		}
 	}
 	return buf.String()

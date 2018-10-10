@@ -130,6 +130,17 @@ func (l *LGx) Info(opts ...func(*LogEvent)) {
 	fmt.Fprintf(os.Stdout, "%+v\n", string(b))
 }
 
+func (l *LGx) Infoif(print bool, opts ...func(*LogEvent)) {
+	if print {
+		b, err := l.newEvent("INFO", opts...)
+		if err != nil {
+			log.Printf(EventErr, err)
+			return
+		}
+		fmt.Fprintf(os.Stdout, "%+v\n", string(b))
+	}
+}
+
 func (l *LGx) Debug(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("DEBUG", opts...)
 	if err != nil {

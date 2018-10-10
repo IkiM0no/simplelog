@@ -16,11 +16,21 @@ import (
 const ISO_8601 = "2006-01-02T15:04:05.999Z"
 
 type Logger interface {
+	Print([]func(*LogEvent))
+	Printif(bool, []func(*LogEvent))
 	Info([]func(*LogEvent))
 	Debug([]func(*LogEvent))
 	Warn([]func(*LogEvent))
 	Error([]func(*LogEvent))
 	Fatal([]func(*LogEvent))
+
+	Printf(string, []interface{})
+	Infof(string, []interface{})
+	Infoif(bool, string, []interface{})
+	Debugf(string, []interface{})
+	Warnf(string, []interface{})
+	Errorf(string, []interface{})
+	Fatalf(string, []interface{})
 }
 
 type LGx struct {
@@ -121,7 +131,9 @@ func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 
 const EventErr = "could not generate log event: %v\n"
 
-func (l *LGx) Info(opts ...func(*LogEvent)) {
+// FUNCTIONAL METHODS
+
+func (l *LGx) Print(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("INFO", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -130,7 +142,7 @@ func (l *LGx) Info(opts ...func(*LogEvent)) {
 	fmt.Fprintf(os.Stdout, "%+v\n", string(b))
 }
 
-func (l *LGx) Infoif(print bool, opts ...func(*LogEvent)) {
+func (l *LGx) Printif(print bool, opts ...func(*LogEvent)) {
 	if print {
 		b, err := l.newEvent("INFO", opts...)
 		if err != nil {
@@ -139,6 +151,15 @@ func (l *LGx) Infoif(print bool, opts ...func(*LogEvent)) {
 		}
 		fmt.Fprintf(os.Stdout, "%+v\n", string(b))
 	}
+}
+
+func (l *LGx) Info(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("INFO", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	fmt.Fprintf(os.Stdout, "%+v\n", string(b))
 }
 
 func (l *LGx) Debug(opts ...func(*LogEvent)) {
@@ -178,11 +199,70 @@ func (l *LGx) Fatal(opts ...func(*LogEvent)) {
 	os.Exit(2)
 }
 
-func (l *LGx) Fatalf(format string, v ...interface{}) {
-	fmt.Fprintf(os.Stderr, format, v...)
-	os.Exit(2)
-}
+// FMT METHODS
 
 func (l *LGx) Printf(format string, v ...interface{}) {
-	fmt.Fprintf(os.Stdout, format, v...)
+	b, err := l.newEvent("INFO", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	fmt.Fprintf(os.Stdout, "%s", string(b))
+}
+
+func (l *LGx) Infof(format string, v ...interface{}) {
+	b, err := l.newEvent("INFO", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	fmt.Fprintf(os.Stdout, "%s", string(b))
+}
+
+func (l *LGx) Infoif(print bool, format string, v ...interface{}) {
+	if print {
+		b, err := l.newEvent("INFO", MsgF(format, v...))
+		if err != nil {
+			log.Printf(EventErr, err)
+			return
+		}
+		fmt.Fprintf(os.Stdout, "%s", string(b))
+	}
+}
+
+func (l *LGx) Debugf(format string, v ...interface{}) {
+	b, err := l.newEvent("DEBUG", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	fmt.Fprintf(os.Stdout, "%s", string(b))
+}
+
+func (l *LGx) Warnf(format string, v ...interface{}) {
+	b, err := l.newEvent("WARN", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s", string(b))
+}
+
+func (l *LGx) Errorf(format string, v ...interface{}) {
+	b, err := l.newEvent("ERROR", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s", string(b))
+}
+
+func (l *LGx) Fatalf(format string, v ...interface{}) {
+	b, err := l.newEvent("FATAL", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "%s", string(b))
+	os.Exit(2)
 }

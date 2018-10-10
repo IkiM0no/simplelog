@@ -29,3 +29,12 @@ func GenerateUUID() (string, error) {
 	}
 	return "", ErrorNewUuid
 }
+
+func StringInSlice(s string, slice []string) bool {
+	for _, elem := range slice {
+		if elem == s {
+			return true
+		}
+	}
+	return false
+}

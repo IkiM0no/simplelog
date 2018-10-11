@@ -12,7 +12,7 @@ func FlatMap(m map[string]interface{}) string {
 	var buf bytes.Buffer
 	for k, v := range m {
 		switch v.(type) {
-		case string, int, int64, bool, float32, float64, uint64, error:
+		case string, int, int32, int64, bool, float32, float64, uint64, error:
 			buf.WriteString(fmt.Sprintf(`"%s"="%s" `, k, interfaceToString(v)))
 		default:
 			log.Println("not implemented. k: %v v: %v. type: %T", k, v, v)

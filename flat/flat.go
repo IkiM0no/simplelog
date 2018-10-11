@@ -78,23 +78,25 @@ func key(first bool, prefix, subkey string) string {
 }
 
 func interfaceToString(inf interface{}) string {
-	switch inf.(type) {
+	switch i := inf.(type) {
 	case nil:
 		return ""
 	case string:
-		return inf.(string)
+		return i
 	case int:
-		return strconv.Itoa(inf.(int))
+		return strconv.Itoa(i)
+	case int32:
+		return strconv.FormatInt(int64(i), 10)
 	case int64:
-		return strconv.FormatInt(inf.(int64), 10)
+		return strconv.FormatInt(i, 10)
 	case bool:
-		return strconv.FormatBool(inf.(bool))
+		return strconv.FormatBool(i)
 	case float32:
-		return strconv.FormatFloat(inf.(float64), 'f', -1, 32)
+		return strconv.FormatFloat(float64(i), 'f', -1, 32)
 	case float64:
-		return strconv.FormatFloat(inf.(float64), 'f', -1, 64)
+		return strconv.FormatFloat(i, 'f', -1, 64)
 	case uint64:
-		return strconv.FormatUint(inf.(uint64), 10)
+		return strconv.FormatUint(i, 10)
 	case error:
 		return inf.(error).Error()
 	default:

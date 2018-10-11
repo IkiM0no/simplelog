@@ -54,7 +54,7 @@ type LGx struct {
 	app      string
 	mode     string
 	Level    LogLevel
-	HttpXLog []string // exclude logging matching string URLs in ServeHTTP
+	HttpXLog []string // exclude matching URL strings from logging in ServeHTTP
 }
 
 type LogEvent struct {
@@ -108,7 +108,7 @@ func lvlFromString(levelStr string) LogLevel {
 }
 
 // New returns a logger with hostname and app intialized.
-func New(app, mode, level string) (*LGx, error) {
+func New(app, mode, level string, exPath []string) (*LGx, error) {
 	var l LGx
 
 	l.Level = lvlFromString(level)
@@ -125,6 +125,8 @@ func New(app, mode, level string) (*LGx, error) {
 		return nil, fmt.Errorf("mode not supported")
 	}
 	l.mode = mode
+
+	l.HttpXLog = exPath
 
 	return &l, nil
 }

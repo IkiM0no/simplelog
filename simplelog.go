@@ -248,9 +248,9 @@ func (l *LGx) Print(opts ...func(*LogEvent)) {
 	l.put(string(b), "%+v\n", 1)
 }
 
-// SLOG METHODS
+// SLOG FUNCTIONAL METHODS
 
-func (l *LGx) Tracef(opts ...func(*LogEvent)) {
+func (l *LGx) TraceF(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("DEBUG", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -259,7 +259,7 @@ func (l *LGx) Tracef(opts ...func(*LogEvent)) {
 	l.put(string(b), "%s\n", 0)
 }
 
-func (l *LGx) Debugf(opts ...func(*LogEvent)) {
+func (l *LGx) DebugF(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("INFO", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -268,7 +268,7 @@ func (l *LGx) Debugf(opts ...func(*LogEvent)) {
 	l.put(string(b), "%s\n", 1)
 }
 
-func (l *LGx) Infof(opts ...func(*LogEvent)) {
+func (l *LGx) InfoF(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("INFO", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -277,7 +277,7 @@ func (l *LGx) Infof(opts ...func(*LogEvent)) {
 	l.put(string(b), "%s\n", 2)
 }
 
-func (l *LGx) Infoif(print bool, opts ...func(*LogEvent)) {
+func (l *LGx) InfoiF(print bool, opts ...func(*LogEvent)) {
 	if print {
 		b, err := l.newEvent("INFO", opts...)
 		if err != nil {
@@ -288,7 +288,7 @@ func (l *LGx) Infoif(print bool, opts ...func(*LogEvent)) {
 	}
 }
 
-func (l *LGx) Warnf(opts ...func(*LogEvent)) {
+func (l *LGx) WarnF(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("WARN", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -297,7 +297,7 @@ func (l *LGx) Warnf(opts ...func(*LogEvent)) {
 	l.put(string(b), "%s\n", 3)
 }
 
-func (l *LGx) Errorf(opts ...func(*LogEvent)) {
+func (l *LGx) ErrorF(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("ERROR", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -306,8 +306,76 @@ func (l *LGx) Errorf(opts ...func(*LogEvent)) {
 	l.put(string(b), "%s\n", 4)
 }
 
-func (l *LGx) Fatalf(opts ...func(*LogEvent)) {
+func (l *LGx) FatalF(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("CRITICAL", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 5)
+	os.Exit(2)
+}
+
+// SLOG STANDARD METHODS
+
+func (l *LGx) Tracef(format string, v ...interface{}) {
+	b, err := l.newEvent("DEBUG", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 0)
+}
+
+func (l *LGx) Debugf(format string, v ...interface{}) {
+	b, err := l.newEvent("INFO", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 1)
+}
+
+func (l *LGx) Infof(format string, v ...interface{}) {
+	b, err := l.newEvent("INFO", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 2)
+}
+
+func (l *LGx) Infoif(print bool, format string, v ...interface{}) {
+	if print {
+		b, err := l.newEvent("INFO", MsgF(format, v...))
+		if err != nil {
+			log.Printf(EventErr, err)
+			return
+		}
+		l.put(string(b), "%s\n", 2)
+	}
+}
+
+func (l *LGx) Warnf(format string, v ...interface{}) {
+	b, err := l.newEvent("WARN", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 3)
+}
+
+func (l *LGx) Errorf(format string, v ...interface{}) {
+	b, err := l.newEvent("ERROR", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 4)
+}
+
+func (l *LGx) Fatalf(format string, v ...interface{}) {
+	b, err := l.newEvent("CRITICAL", MsgF(format, v...))
 	if err != nil {
 		log.Printf(EventErr, err)
 		return

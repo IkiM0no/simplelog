@@ -23,6 +23,7 @@ type LogLevel int
 
 const (
 	TRACE LogLevel = iota
+	DEBUG
 	INFO
 	WARN
 	ERROR
@@ -33,46 +34,101 @@ var gDefaultLogLevel = INFO
 
 type Logger interface {
 	Print([]func(*LogEvent))
-	Printif(bool, []func(*LogEvent))
-	Info([]func(*LogEvent))
-	Debug([]func(*LogEvent))
-	Warn([]func(*LogEvent))
-	Error([]func(*LogEvent))
-	Fatal([]func(*LogEvent))
 
 	Tracef(string, []interface{})
-	Printf(string, []interface{})
+	Debugf(string, []interface{})
+	Printif(bool, string, []interface{})
 	Infof(string, []interface{})
-	Infoif(bool, string, []interface{})
 	Warnf(string, []interface{})
 	Errorf(string, []interface{})
 	Fatalf(string, []interface{})
 }
 
 type LGx struct {
-	host     string
-	app      string
-	mode     string
-	Level    LogLevel
-	HttpXLog []string // exclude matching URL strings from logging in ServeHTTP
+	host     string   `json:"host,omitempty"`
+	app      string   `json:"app",omitempty`
+	mode     string   `json:"mode",omitempty`
+	Level    LogLevel `json:"level",omitempty`
+	HttpXLog []string
 }
 
 type LogEvent struct {
+	Event map[string]interface{} `json:"event,omitempty"`
 	Time  string                 `json:"time"`
 	Uuid  string                 `json:"uuid"`
 	Host  string                 `json:"host"`
 	App   string                 `json:"app"`
 	Level string                 `json:"level"`
 	Msg   string                 `json:"msg,omitempty"`
-	Event map[string]interface{} `json:"event,omitempty"`
+	mode  string                 `json:"mode",omitempty`
 }
 
-// Msg functional option sets LogEvent.Msg to the given string.
-func Msg(msg string) func(*LogEvent) {
-	return func(e *LogEvent) {
-		e.Msg = msg
+type Opts struct {
+	Event []func(*LogEvent)
+}
+
+func lvlFromString(levelStr string) LogLevel {
+	levelStr = strings.ToLower(strings.TrimSpace(levelStr))
+	switch levelStr {
+	case "trace":
+		return TRACE
+	case "debug":
+		return DEBUG
+	case "info":
+		return INFO
+	case "warn":
+		return WARN
+	case "error":
+		return ERROR
+	case "critical":
+		return CRITICAL
+	default:
+		return gDefaultLogLevel
 	}
 }
+
+const kvpTemplate = `"date"="%s" "uuid"="%s" "host"="%s" "app"="%s" "level"="%s" "msg"="%s" %s`
+
+func newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
+	u, err := utils.GenerateUUID()
+	if err != nil {
+		return []byte{}, err
+	}
+	e := &LogEvent{
+		Time:  time.Now().UTC().Format(ISO_8601),
+		Uuid:  u,
+		Level: level,
+	}
+
+	for _, opt := range opts {
+		opt(e)
+	}
+
+	if e.mode == "" {
+		e.mode = "kvp"
+	}
+
+	if e.mode == "json" {
+		b, err := json.Marshal(*e)
+		if err != nil {
+			return []byte{}, err
+		}
+		return b, nil
+	} else {
+		e := *e
+		f, err := flat.Flatten(e.Event, "event_")
+		if err != nil {
+			return []byte{}, err
+		}
+
+		s := flat.FlatMap(f)
+		event := fmt.Sprintf(kvpTemplate, e.Time, e.Uuid,
+			e.Host, e.App, e.Level, e.Msg, s)
+		return []byte(event), nil
+	}
+}
+
+const EventErr = "could not generate log event: %v\n"
 
 // MsgF functional option sets LogEvent.Msg according to the given
 // format and list of arguments.
@@ -89,49 +145,176 @@ func Event(event map[string]interface{}) func(*LogEvent) {
 	}
 }
 
-func lvlFromString(levelStr string) LogLevel {
-	levelStr = strings.ToLower(strings.TrimSpace(levelStr))
-	switch levelStr {
-	case "trace":
-		return TRACE
-	case "info":
-		return INFO
-	case "warn":
-		return WARN
-	case "error":
-		return ERROR
-	case "critical":
-		return CRITICAL
-	default:
-		return gDefaultLogLevel
+// Mode functional option sets LogEvent mode
+func Mode(mode string) func(*LogEvent) {
+	return func(e *LogEvent) {
+		e.mode = mode
 	}
 }
 
-// New returns a logger with hostname and app intialized.
-func New(app, mode, level string, exPath []string) (*LGx, error) {
-	var l LGx
+// Host functional option sets LogEvent host
+func Host(host string) func(*LogEvent) {
+	return func(e *LogEvent) {
+		e.Host = host
+	}
+}
 
-	l.Level = lvlFromString(level)
+// App functional option sets LogEvent app
+func App(app string) func(*LogEvent) {
+	return func(e *LogEvent) {
+		e.App = app
+	}
+}
 
-	hostname, err := os.Hostname()
+func Tracef(opts ...func(*LogEvent)) {
+	b, err := newEvent("TRACE", opts...)
 	if err != nil {
-		return nil, fmt.Errorf("could not determine hostname %v", err)
+		log.Printf(EventErr, err)
+		return
 	}
-
-	l.app = app
-	l.host = hostname
-
-	if mode != "json" && mode != "kvp" {
-		return nil, fmt.Errorf("mode not supported")
-	}
-	l.mode = mode
-
-	l.HttpXLog = exPath
-
-	return &l, nil
+	put(string(b), "%s\n", 0)
 }
 
-const kvpTemplate = `"date"="%s" "uuid"="%s" "host"="%s" "app"="%s" "level"="%s" "msg"="%s" %s`
+func Debugf(opts ...func(*LogEvent)) {
+	b, err := newEvent("DEBUG", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	put(string(b), "%s\n", 1)
+}
+
+func Infof(opts ...func(*LogEvent)) {
+	b, err := newEvent("INFO", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	put(string(b), "%s\n", 2)
+}
+
+func Warnf(opts ...func(*LogEvent)) {
+	b, err := newEvent("WARN", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	put(string(b), "%s\n", 3)
+}
+
+func Errorf(opts ...func(*LogEvent)) {
+	b, err := newEvent("ERROR", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	put(string(b), "%s\n", 4)
+}
+
+func Fatalf(opts ...func(*LogEvent)) {
+	b, err := newEvent("CRITICAL", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	put(string(b), "%s\n", 5)
+	os.Exit(2)
+}
+
+func (l *LGx) put(logEvent, format string, lvl LogLevel) {
+	if lvl >= l.Level {
+		fmt.Fprintf(os.Stdout, format, logEvent)
+	} else {
+		fmt.Fprintf(os.Stderr, format, logEvent)
+	}
+}
+
+func put(logEvent, format string, lvl LogLevel) {
+	if lvl >= DEBUG {
+		fmt.Fprintf(os.Stdout, format, logEvent)
+	} else {
+		fmt.Fprintf(os.Stderr, format, logEvent)
+	}
+}
+
+// SLOG OBJECT FUNCTIONAL METHODS
+
+func (l *LGx) Print(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("INFO", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%+v\n", 1)
+}
+
+// SLOG METHODS
+
+func (l *LGx) Tracef(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("DEBUG", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 0)
+}
+
+func (l *LGx) Debugf(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("INFO", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 1)
+}
+
+func (l *LGx) Infof(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("INFO", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 2)
+}
+
+func (l *LGx) Infoif(print bool, opts ...func(*LogEvent)) {
+	if print {
+		b, err := l.newEvent("INFO", opts...)
+		if err != nil {
+			log.Printf(EventErr, err)
+			return
+		}
+		l.put(string(b), "%s\n", 2)
+	}
+}
+
+func (l *LGx) Warnf(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("WARN", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 3)
+}
+
+func (l *LGx) Errorf(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("ERROR", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 4)
+}
+
+func (l *LGx) Fatalf(opts ...func(*LogEvent)) {
+	b, err := l.newEvent("CRITICAL", opts...)
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 5)
+	os.Exit(2)
+}
 
 // newEvent returns a LogEvent. Convenience method for log-level functions.
 func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
@@ -149,6 +332,10 @@ func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 
 	for _, opt := range opts {
 		opt(e)
+	}
+
+	if e.mode == "" {
+		e.mode = "kvp"
 	}
 
 	if l.mode == "json" {
@@ -171,150 +358,47 @@ func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 	}
 }
 
-const EventErr = "could not generate log event: %v\n"
-
-// FUNCTIONAL METHODS
-
-func (l *LGx) Print(opts ...func(*LogEvent)) {
-	b, err := l.newEvent("INFO", opts...)
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
+// New slog functional options
+func WithHost(host string) func(*LGx) {
+	return func(l *LGx) {
+		l.host = host
 	}
-	l.put(string(b), "%+v\n", 1)
 }
 
-func (l *LGx) Printif(print bool, opts ...func(*LogEvent)) {
-	if print {
-		b, err := l.newEvent("INFO", opts...)
-		if err != nil {
-			log.Printf(EventErr, err)
-			return
+func WithApp(app string) func(*LGx) {
+	return func(l *LGx) {
+		l.app = app
+	}
+}
+
+func WithMode(mode string) func(*LGx) {
+	return func(l *LGx) {
+		if mode != "json" && mode != "kvp" {
+			l.mode = "kvp"
 		}
-		l.put(string(b), "%+v\n", 1)
+		l.mode = mode
 	}
 }
 
-func (l *LGx) Info(opts ...func(*LogEvent)) {
-	b, err := l.newEvent("INFO", opts...)
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%+v\n", 1)
-}
-
-func (l *LGx) Debug(opts ...func(*LogEvent)) {
-	b, err := l.newEvent("DEBUG", opts...)
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%+v\n", 1)
-}
-
-func (l *LGx) Warn(opts ...func(*LogEvent)) {
-	b, err := l.newEvent("WARN", opts...)
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%+v\n", 2)
-}
-
-func (l *LGx) Error(opts ...func(*LogEvent)) {
-	b, err := l.newEvent("ERROR", opts...)
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%+v\n", 3)
-}
-
-func (l *LGx) Fatal(opts ...func(*LogEvent)) {
-	b, err := l.newEvent("CRITICAL", opts...)
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%+v\n", 4)
-	os.Exit(2)
-}
-
-// FMT METHODS
-
-func (l *LGx) Tracef(format string, v ...interface{}) {
-	b, err := l.newEvent("DEBUG", MsgF(format, v...))
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%s\n", 0)
-}
-
-func (l *LGx) Printf(format string, v ...interface{}) {
-	b, err := l.newEvent("INFO", MsgF(format, v...))
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%s\n", 1)
-}
-
-func (l *LGx) Infof(format string, v ...interface{}) {
-	b, err := l.newEvent("INFO", MsgF(format, v...))
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%s\n", 1)
-}
-
-func (l *LGx) Infoif(print bool, format string, v ...interface{}) {
-	if print {
-		b, err := l.newEvent("INFO", MsgF(format, v...))
-		if err != nil {
-			log.Printf(EventErr, err)
-			return
-		}
-		l.put(string(b), "%s\n", 1)
+func WithLevel(level string) func(*LGx) {
+	return func(l *LGx) {
+		l.Level = lvlFromString(level)
 	}
 }
 
-func (l *LGx) Warnf(format string, v ...interface{}) {
-	b, err := l.newEvent("WARN", MsgF(format, v...))
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
+func WithHttpXLog(x []string) func(*LGx) {
+	return func(l *LGx) {
+		l.HttpXLog = x
 	}
-	l.put(string(b), "%s\n", 2)
 }
 
-func (l *LGx) Errorf(format string, v ...interface{}) {
-	b, err := l.newEvent("ERROR", MsgF(format, v...))
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
+// New returns a logger with functional options intialized.
+func New(opts ...func(*LGx)) *LGx {
+	l := &LGx{}
+	for _, opt := range opts {
+		opt(l)
 	}
-	l.put(string(b), "%s\n", 3)
-}
-
-func (l *LGx) Fatalf(format string, v ...interface{}) {
-	b, err := l.newEvent("CRITICAL", MsgF(format, v...))
-	if err != nil {
-		log.Printf(EventErr, err)
-		return
-	}
-	l.put(string(b), "%s\n", 4)
-	os.Exit(2)
-}
-
-func (l *LGx) put(logEvent, format string, lvl LogLevel) {
-	if lvl >= l.Level {
-		fmt.Fprintf(os.Stdout, format, logEvent)
-	} else {
-		fmt.Fprintf(os.Stderr, format, logEvent)
-	}
+	return l
 }
 
 // Method ServeHTTP provides portability for passing simplelog to http middleware

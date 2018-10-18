@@ -166,7 +166,7 @@ func App(app string) func(*LogEvent) {
 	}
 }
 
-func Tracef(opts ...func(*LogEvent)) {
+func TraceF(opts ...func(*LogEvent)) {
 	b, err := newEvent("TRACE", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -175,7 +175,7 @@ func Tracef(opts ...func(*LogEvent)) {
 	put(string(b), "%s\n", 0)
 }
 
-func Debugf(opts ...func(*LogEvent)) {
+func DebugF(opts ...func(*LogEvent)) {
 	b, err := newEvent("DEBUG", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -184,7 +184,7 @@ func Debugf(opts ...func(*LogEvent)) {
 	put(string(b), "%s\n", 1)
 }
 
-func Infof(opts ...func(*LogEvent)) {
+func InfoF(opts ...func(*LogEvent)) {
 	b, err := newEvent("INFO", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -193,7 +193,7 @@ func Infof(opts ...func(*LogEvent)) {
 	put(string(b), "%s\n", 2)
 }
 
-func Warnf(opts ...func(*LogEvent)) {
+func WarnF(opts ...func(*LogEvent)) {
 	b, err := newEvent("WARN", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -202,7 +202,7 @@ func Warnf(opts ...func(*LogEvent)) {
 	put(string(b), "%s\n", 3)
 }
 
-func Errorf(opts ...func(*LogEvent)) {
+func ErrorF(opts ...func(*LogEvent)) {
 	b, err := newEvent("ERROR", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)
@@ -211,7 +211,7 @@ func Errorf(opts ...func(*LogEvent)) {
 	put(string(b), "%s\n", 4)
 }
 
-func Fatalf(opts ...func(*LogEvent)) {
+func FatalF(opts ...func(*LogEvent)) {
 	b, err := newEvent("CRITICAL", opts...)
 	if err != nil {
 		log.Printf(EventErr, err)

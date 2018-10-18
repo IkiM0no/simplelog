@@ -345,6 +345,15 @@ func (l *LGx) Infof(format string, v ...interface{}) {
 	l.put(string(b), "%s\n", 2)
 }
 
+func (l *LGx) Printf(format string, v ...interface{}) {
+	b, err := l.newEvent("INFO", MsgF(format, v...))
+	if err != nil {
+		log.Printf(EventErr, err)
+		return
+	}
+	l.put(string(b), "%s\n", 2)
+}
+
 func (l *LGx) Infoif(print bool, format string, v ...interface{}) {
 	if print {
 		b, err := l.newEvent("INFO", MsgF(format, v...))

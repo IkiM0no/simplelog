@@ -1,4 +1,4 @@
-// Package simplelog implements a simple logging package for json log events
+// Package simplelog implements a simple logging package for log events
 // with variadic functional options for messages and event objects.
 package simplelog // import github.com/IkiM0no/simplelog
 
@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -34,7 +35,6 @@ var gDefaultLogLevel = INFO
 
 type Logger interface {
 	Print([]func(*LogEvent))
-
 	Tracef(string, []interface{})
 	Debugf(string, []interface{})
 	Printif(bool, string, []interface{})
@@ -52,42 +52,63 @@ type LGx struct {
 	HttpXLog []string
 }
 
+type LogFormat string
+
 type LogEvent struct {
 	Event map[string]interface{} `json:"event,omitempty"`
-	Time  string                 `json:"time"`
+	Date  string                 `json:"date"`
 	Uuid  string                 `json:"uuid"`
-	Host  string                 `json:"host"`
-	App   string                 `json:"app"`
+	Host  string                 `json:"host,omitempty"`
+	App   string                 `json:"app,omitempty"`
 	Level string                 `json:"level"`
 	Msg   string                 `json:"msg,omitempty"`
-	mode  string                 `json:"mode",omitempty`
+	Mode  LogFormat              `json:"-"`
 }
 
 type Opts struct {
 	Event []func(*LogEvent)
 }
 
-func lvlFromString(levelStr string) LogLevel {
-	levelStr = strings.ToLower(strings.TrimSpace(levelStr))
-	switch levelStr {
-	case "trace":
-		return TRACE
-	case "debug":
-		return DEBUG
-	case "info":
-		return INFO
-	case "warn":
-		return WARN
-	case "error":
-		return ERROR
-	case "critical":
-		return CRITICAL
-	default:
-		return gDefaultLogLevel
-	}
-}
+func (e LogEvent) toKVP() (string, error) {
 
-const kvpTemplate = `"date"="%s" "uuid"="%s" "host"="%s" "app"="%s" "level"="%s" "msg"="%s" %s`
+	kvpT := `"%s"="%v"`
+	kvpLineT := "%s %s"
+
+	eventType := reflect.TypeOf(e)
+	numFields := eventType.NumField()
+	eventValue := reflect.ValueOf(e)
+
+	var kvpList []string
+	var flatEvent string
+
+	for i := 0; i < numFields; i++ {
+
+		val := eventValue.Field(i)
+		inf := val.Interface()
+		name := strings.ToLower(eventValue.Type().Field(i).Name)
+
+		switch inf.(type) {
+		case string:
+			if inf != "" {
+				kvp := fmt.Sprintf(kvpT, name, val)
+				kvpList = append(kvpList, kvp)
+			}
+		case map[string]interface{}:
+			f, err := flat.Flatten(e.Event, "event_")
+			if err != nil {
+				return "", err
+			}
+			flatEvent = flat.FlatMap(f)
+		case LogFormat:
+			continue
+		}
+	}
+
+	kvps := strings.Join(kvpList, " ")
+	res := fmt.Sprintf(kvpLineT, kvps, flatEvent)
+
+	return res, nil
+}
 
 func newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 	u, err := utils.GenerateUUID()
@@ -95,7 +116,7 @@ func newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 		return []byte{}, err
 	}
 	e := &LogEvent{
-		Time:  time.Now().UTC().Format(ISO_8601),
+		Date:  time.Now().UTC().Format(ISO_8601),
 		Uuid:  u,
 		Level: level,
 	}
@@ -104,11 +125,11 @@ func newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 		opt(e)
 	}
 
-	if e.mode == "" {
-		e.mode = "kvp"
+	if e.Mode == "" {
+		e.Mode = "kvp"
 	}
 
-	if e.mode == "json" {
+	if e.Mode == "json" {
 		b, err := json.Marshal(*e)
 		if err != nil {
 			return []byte{}, err
@@ -116,15 +137,11 @@ func newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 		return b, nil
 	} else {
 		e := *e
-		f, err := flat.Flatten(e.Event, "event_")
+		k, err := e.toKVP()
 		if err != nil {
 			return []byte{}, err
 		}
-
-		s := flat.FlatMap(f)
-		event := fmt.Sprintf(kvpTemplate, e.Time, e.Uuid,
-			e.Host, e.App, e.Level, e.Msg, s)
-		return []byte(event), nil
+		return []byte(k), nil
 	}
 }
 
@@ -146,9 +163,9 @@ func Event(event map[string]interface{}) func(*LogEvent) {
 }
 
 // Mode functional option sets LogEvent mode
-func Mode(mode string) func(*LogEvent) {
+func Mode(mode LogFormat) func(*LogEvent) {
 	return func(e *LogEvent) {
-		e.mode = mode
+		e.Mode = mode
 	}
 }
 
@@ -247,8 +264,6 @@ func (l *LGx) Print(opts ...func(*LogEvent)) {
 	}
 	l.put(string(b), "%+v\n", 1)
 }
-
-// SLOG FUNCTIONAL METHODS
 
 func (l *LGx) TraceF(opts ...func(*LogEvent)) {
 	b, err := l.newEvent("DEBUG", opts...)
@@ -399,8 +414,9 @@ func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
+
 	e := &LogEvent{
-		Time:  time.Now().UTC().Format(ISO_8601),
+		Date:  time.Now().UTC().Format(ISO_8601),
 		Uuid:  u,
 		Host:  l.host,
 		App:   l.app,
@@ -411,8 +427,8 @@ func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 		opt(e)
 	}
 
-	if e.mode == "" {
-		e.mode = "kvp"
+	if e.Mode == "" {
+		e.Mode = "kvp"
 	}
 
 	if l.mode == "json" {
@@ -423,15 +439,31 @@ func (l *LGx) newEvent(level string, opts ...func(*LogEvent)) ([]byte, error) {
 		return b, nil
 	} else {
 		e := *e
-		f, err := flat.Flatten(e.Event, "event_")
+		k, err := e.toKVP()
 		if err != nil {
 			return []byte{}, err
 		}
+		return []byte(k), nil
+	}
+}
 
-		s := flat.FlatMap(f)
-		event := fmt.Sprintf(kvpTemplate, e.Time, e.Uuid,
-			e.Host, e.App, e.Level, e.Msg, s)
-		return []byte(event), nil
+func lvlFromString(levelStr string) LogLevel {
+	levelStr = strings.ToLower(strings.TrimSpace(levelStr))
+	switch levelStr {
+	case "trace":
+		return TRACE
+	case "debug":
+		return DEBUG
+	case "info":
+		return INFO
+	case "warn":
+		return WARN
+	case "error":
+		return ERROR
+	case "critical":
+		return CRITICAL
+	default:
+		return gDefaultLogLevel
 	}
 }
 

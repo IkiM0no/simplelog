@@ -38,3 +38,12 @@ func StringInSlice(s string, slice []string) bool {
 	}
 	return false
 }
+
+func ConvertToUTF8(s string, length int) string {
+	// truncates string if length > 0
+	r := []rune(s)
+	if length > 0 && len(r) > length {
+		r = r[0:length]
+	}
+	return string(r)
+}
